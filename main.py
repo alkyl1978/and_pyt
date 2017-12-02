@@ -1,59 +1,88 @@
 #!python
 import kivy
-kivy.require('1.5.1')
+kivy.require('1.10.0')
+from kivy import platform
+if platform!='android':
+    from kivy.config import Config
+    Config.set('graphics', 'show_cursor', '1')
+    Config.set('kivy', 'log_level', 'warning')
 from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.widget import Widget
 from kivy.uix.button import Button
-from kivy.uix.stacklayout import StackLayout
-from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.popup import Popup
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.slider import Slider
-from functools import partial
+from kivy.properties import DictProperty,StringProperty
+from kivy import metrics
+try:
+    from kivy.garden.xpopup import XError, XProgress, XAuthorization, XConfirmation
+except:
+    from xpopup import XError, XProgress, XAuthorization, XConfirmation
 
-class ScrollApp(App):
+class AuthEx(XAuthorization):
 
+    required_fields = DictProperty(
+        {'login': 'Login', 'password': 'Password', 'host': 'Host'})
+    host = StringProperty(u'')
+
+    def _get_form(self):
+        layout = super(AuthEx, self)._get_form()
+        pnl = BoxLayout(size_hint_y=None, height=metrics.dp(28), spacing=5)
+        pnl.add_widget(Label(text='Host:', halign='right',
+                             size_hint_x=None, width=metrics.dp(80)))
+        pnl.add_widget(TextInput(id='host', multiline=False, font_size=14,
+                                 text=self.host))
+        layout.add_widget(pnl)
+        layout.add_widget(Widget())
+        return layout
+
+class AppMainUI(BoxLayout):
+    # Auth properties
+    login = StringProperty(u'')
+    password = StringProperty(u'')
+    host = StringProperty('')
+
+    def __init__(self):
+        super(AppMainUI, self).__init__()
+        pkm = BoxLayout()
+        pkm.add_widget(Button(text = 'start', on_press = self.get_command_start))
+        self.add_widget(pkm)
+
+    def _login_dismiss(self, instance):
+        if instance.is_canceled():
+            App.get_running_app().stop()
+            return
+        self.login = instance.get_value('login')
+        self.password = instance.get_value('password')
+        self.host = instance.get_value('host')
+
+    def _get_auth(self):
+        print 1
+
+    def _send_request(self, url, success=None, error=None, params=None):
+        print url
+
+    def _login(self):
+        AuthEx(login=self.login, password=self.password, host=self.host,
+               autologin=None, pos_hint={'top': 0.99},
+               on_dismiss=self._login_dismiss)
+    def get_command_start(self):
+        pass
+    def start(self):
+        if not self.login or not self.password or not self.host:
+            self._login()
+
+
+class AppMain(App):
+    remote = None
     def build(self):
-        popup = Popup(title='Draggable Scrollbar', size_hint=(0.8,1), auto_dismiss=False)
-
-        #this layout is the child widget for the main popup
-        layout1 = StackLayout(orientation='lr-bt')
-
-        #this button is a child of layout1
-        closebutton = Button(text='close', size_hint=(0.9,0.05))
-        closebutton.bind(on_press=popup.dismiss)
-
-        #another child of layout1 and this is the scrollview which will have a custom draggable scrollbar
-        scrlv = ScrollView(size_hint=(0.9,0.95))
-
-        #the last child of layout1 and this will act as the draggable scrollbar
-        s = Slider(min=0, max=1, value=25, orientation='vertical', step=0.01, size_hint=(0.1, 0.95))
-
-        scrlv.bind(scroll_y=partial(self.slider_change, s))
-
-        #what this does is, whenever the slider is dragged, it scrolls the previously added scrollview by the same amount the slider is dragged
-        s.bind(value=partial(self.scroll_change, scrlv))
-
-        layout2 = GridLayout(cols=4, size_hint_y=None)
-        layout2.bind(minimum_height=layout2.setter('height'))
-        for i in range(1, 301):
-            btn = Button(text=str(i), size_hint_y=None, height=60, valign='middle', font_size=12)
-            btn.text_size = (btn.size)
-            layout2.add_widget(btn)
-        scrlv.add_widget(layout2)
-        layout1.add_widget(closebutton)
-        layout1.add_widget(scrlv)
-        layout1.add_widget(s)
-        popup.content = layout1
-        popup.open()
-
-    def scroll_change(self, scrlv, instance, value):
-        scrlv.scroll_y = value
-
-    def slider_change(self, s, instance, value):
-        if value >= 0:
-        #this to avoid 'maximum recursion depth exceeded' error
-            s.value=value
+        config = self.config
+        self.remote = AppMainUI()
+        return self.remote
+    def on_stop(self):
+        self.config.write()
+    def on_start(self):
+        self.remote.start()
 
 if __name__ == '__main__':
-    ScrollApp().run()
+    AppMain().run()
